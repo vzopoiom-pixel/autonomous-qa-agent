@@ -28,5 +28,6 @@ jobs:
     - name: Run PyTest
       env:
         OPENAI_API_KEY: "mock-key-for-testing"
+      # ИСПРАВЛЕНО: Добавлен PYTHONPATH=. чтобы pytest видел файлы в корне репозитория
       run: |
-        pytest tests/ -v
+        PYTHONPATH=. pytest tests/ -v
