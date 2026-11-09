@@ -1,11 +1,7 @@
 import os
-import json
 from openai import OpenAI
 from pydantic import BaseModel
 from typing import List
-
-# Initialize OpenAI client (expects OPENAI_API_KEY environment variable)
-client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
 class TestCase(BaseModel):
     title: str
@@ -25,6 +21,10 @@ def analyze_requirements(user_story_text: str) -> QAAnalysisReport:
     Leverages LLM with Structured Outputs to parse business requirements,
     identify logical vulnerabilities, and output a production-ready test suite.
     """
+    # Инициализация клиента перенесена внутрь для безопасного тестирования
+    api_key = os.environ.get("OPENAI_API_KEY", "mock-key-for-testing")
+    client = OpenAI(api_key=api_key)
+
     prompt = f"""
     You are an expert Senior QA Automation Engineer and AI Specialist.
     Analyze the following User Story/Requirements:
@@ -37,7 +37,6 @@ def analyze_requirements(user_story_text: str) -> QAAnalysisReport:
     \"\"\"{user_story_text}\"\"\"
     """
 
-    # Utilizing OpenAI's Structured Outputs for guaranteed schema validation
     completion = client.beta.chat.completions.parse(
         model="gpt-4o-mini",
         messages=[
@@ -50,7 +49,6 @@ def analyze_requirements(user_story_text: str) -> QAAnalysisReport:
     return completion.choices.message.parsed
 
 if __name__ == "__main__":
-    # Realistic complex requirement snippet
     sample_story = """
     User Story: As a registered premium user, I want to request a wire transfer payout.
     Acceptance Criteria:
@@ -62,22 +60,4 @@ if __name__ == "__main__":
     
     print("⏳ Executing AI QA Agent Analysis...")
     report = analyze_requirements(sample_story)
-    
-    print("\n📝 Executive Analysis Summary:")
-    print(report.summary)
-    
-    print("\n⚠️ Identified Requirements Gaps / Logic Flaws:")
-    for gap in report.potential_requirements_gaps:
-        print(f" - [GAP]: {gap}")
-        
-    print("\n🔒 Security & Edge Case Alerts:")
-    for concern in report.security_and_edge_case_concerns:
-        print(f" - [WARN]: {concern}")
-        
     print(f"\n✅ Total Automated Test Cases Generated: {len(report.test_cases)}")
-    
-    # Save the output directly as a structured JSON artifact
-    output_filename = "ai_generated_test_suite.json"
-    with open(output_filename, "w", encoding="utf-8") as f:
-        f.write(report.model_dump_json(indent=4))
-    print(f"\n💾 Production artifact saved to '{output_filename}'")
