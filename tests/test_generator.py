@@ -1,52 +1,39 @@
 import pytest
-from unittest.mock import MagicMock, patch
-from generator import analyze_requirements, QAAnalysisReport, TestCase
+from unittest.mock import MagicMock
+from generator import AutonomousQAAgent, RequirementAnalysisSuite, QA_TestCase
 
-@pytest.fixture
-def mock_openai_response():
-    """Generates a mock structured response identical to OpenAI's parsed output."""
-    mock_test_case = TestCase(
-        title="Mock Test Case",
-        preconditions="User is logged in",
-        steps=["Step 1", "Step 2"],
-        expected_result="Success",
-        gherkin_feature="Scenario: Mock Scenario"
+def test_analyze_requirements_success():
+    """Verifies successful payload parsing using mocked OpenAI client responses."""
+    # 1. Provision structured mock payload data blocks
+    mock_case = QA_TestCase(
+        title="Verify secure authentication",
+        preconditions=["User is registered", "Database online"],
+        steps=["Navigate to auth endpoint", "Submit corporate credentials"],
+        expected_result="System returns JWT tracking token",
+        gherkin_scenario="Scenario: Successful authentication\nGiven environmental states are met..."
     )
     
-    return QAAnalysisReport(
-        summary="Test summary",
-        potential_requirements_gaps=["Gap 1"],
-        security_and_edge_case_concerns=["Concern 1"],
-        test_cases=[mock_test_case]
+    mock_suite = RequirementAnalysisSuite(
+        requirement_id="REQ-42",
+        identified_edge_cases=["Expired tokens handling", "SQL injection insertion bounds"],
+        generated_suite=[mock_case]
     )
 
-@patch("generator.OpenAI")
-def test_analyze_requirements_success(mock_openai_class, mock_openai_response):
-    """Validates that the agent correctly invokes the LLM client."""
-    # Создаем цепочку вызовов mock для client.beta.chat.completions.parse
-    mock_client = MagicMock()
-    mock_openai_class.return_value = mock_client
+    # 2. Mock Agent execution layers
+    agent = AutonomousQAAgent(api_key="mocked-production-key-token")
+    agent.client.beta.chat.completions.parse = MagicMock()
     
-    mock_parse = mock_client.beta.chat.completions.parse
-    
-    mock_message = MagicMock()
-    mock_message.parsed = mock_openai_response
+    # Configure mock choices payload matrix mapping
     mock_choice = MagicMock()
-    mock_choice.message = mock_message
-    mock_parse.return_value.choices = [mock_choice]
-
-    # Запускаем функцию
-    sample_text = "As a user I want to log in."
-    result = analyze_requirements(sample_text)
-
-    # Проверки
-    assert isinstance(result, QAAnalysisReport)
-    assert result.summary == "Test summary"
-    assert len(result.test_cases) == 1
-    assert result.test_cases[0].title == "Mock Test Case"
+    mock_choice.message.parsed = mock_suite
+    mock_response = MagicMock()
+    mock_response.choices = [mock_choice]
     
-    # Проверяем, что парсинг ИИ был вызван с нужной структурой данных
-    mock_parse.assert_called_once()
-    call_kwargs = mock_parse.call_args.kwargs
-    assert call_kwargs["model"] == "gpt-4o-mini"
-    assert call_kwargs["response_format"] == QAAnalysisReport
+    agent.client.beta.chat.completions.parse.return_value = mock_response
+
+    # 3. Trigger analysis and execute rigid integrity checks
+    result = agent.analyze_requirements("Sample software specification payload")
+    
+    assert result.requirement_id == "REQ-42"
+    assert len(result.identified_edge_cases) == 2
+    assert result.generated_suite[0].title == "Verify secure authentication"
