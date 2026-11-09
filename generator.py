@@ -36,7 +36,6 @@ def analyze_requirements(user_story_text: str) -> QAAnalysisReport:
     Requirements to analyze:
     \"\"\"{user_story_text}\"\"\"
     """
-
     completion = client.beta.chat.completions.parse(
         model="gpt-4o-mini",
         messages=[
@@ -46,7 +45,8 @@ def analyze_requirements(user_story_text: str) -> QAAnalysisReport:
         response_format=QAAnalysisReport,
     )
 
-    return completion.choices.message.parsed
+    # ИСПРАВЛЕНО: Добавлен [0] для выбора первого объекта из списка choices
+    return completion.choices[0].message.parsed
 
 if __name__ == "__main__":
     sample_story = """
