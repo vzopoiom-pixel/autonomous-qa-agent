@@ -20,30 +20,33 @@ def mock_openai_response():
         test_cases=[mock_test_case]
     )
 
-@patch("generator.client.beta.chat.completions.parse")
-def test_analyze_requirements_success(mock_parse, mock_openai_response):
-    """Validates that the agent correctly invokes the LLM and parses the Pydantic schema."""
-    # Setup mock behavior
+@patch("generator.OpenAI")
+def test_analyze_requirements_success(mock_openai_class, mock_openai_response):
+    """Validates that the agent correctly invokes the LLM client."""
+    # Создаем цепочку вызовов mock для client.beta.chat.completions.parse
+    mock_client = MagicMock()
+    mock_openai_class.return_value = mock_client
+    
+    mock_parse = mock_client.beta.chat.completions.parse
+    
     mock_message = MagicMock()
     mock_message.parsed = mock_openai_response
     mock_choice = MagicMock()
     mock_choice.message = mock_message
     mock_parse.return_value.choices = [mock_choice]
 
-    # Execute target function
+    # Запускаем функцию
     sample_text = "As a user I want to log in."
     result = analyze_requirements(sample_text)
 
-    # Assertions
+    # Проверки
     assert isinstance(result, QAAnalysisReport)
     assert result.summary == "Test summary"
     assert len(result.test_cases) == 1
-    # ИСПРАВЛЕНО: Добавлен индекс [0] для корректного обращения к объекту в списке
     assert result.test_cases[0].title == "Mock Test Case"
     
-    # Verify OpenAI API was called with correct parameters
+    # Проверяем, что парсинг ИИ был вызван с нужной структурой данных
     mock_parse.assert_called_once()
     call_kwargs = mock_parse.call_args.kwargs
     assert call_kwargs["model"] == "gpt-4o-mini"
     assert call_kwargs["response_format"] == QAAnalysisReport
-
