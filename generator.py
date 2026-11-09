@@ -1,63 +1,53 @@
 import os
-from openai import OpenAI
-from pydantic import BaseModel
+import logging
 from typing import List
+from pydantic import BaseModel, Field
+from openai import OpenAI
 
-class TestCase(BaseModel):
-    title: str
-    preconditions: str
-    steps: List[str]
-    expected_result: str
-    gherkin_feature: str
+# Setup structured logging engine
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
-class QAAnalysisReport(BaseModel):
-    summary: str
-    potential_requirements_gaps: List[str]
-    security_and_edge_case_concerns: List[str]
-    test_cases: List[TestCase]
-
-def analyze_requirements(user_story_text: str) -> QAAnalysisReport:
+class QA_TestCase(BaseModel):
     """
-    Leverages LLM with Structured Outputs to parse business requirements,
-    identify logical vulnerabilities, and output a production-ready test suite.
+    Structured Pydantic validation schema for captured test cases.
+    Renamed to prevent conflict with Pytest collection mechanisms.
     """
-    # Инициализация клиента перенесена внутрь для безопасного тестирования
-    api_key = os.environ.get("OPENAI_API_KEY", "mock-key-for-testing")
-    client = OpenAI(api_key=api_key)
+    title: str = Field(..., description="The definitive, concise title of the test scenario")
+    preconditions: List[str] = Field(default=[], description="Array of environmental state prerequisites")
+    steps: List[str] = Field(..., description="Sequential step-by-step execution path instructions")
+    expected_result: str = Field(..., description="The definitive expected baseline response from the system")
+    gherkin_scenario: str = Field(..., description="BDD Gherkin syntax representation of this exact workflow")
 
-    prompt = f"""
-    You are an expert Senior QA Automation Engineer and AI Specialist.
-    Analyze the following User Story/Requirements:
-    1. Detect potential logical gaps, missing edge cases, or business logic ambiguities.
-    2. Identify security, performance, or boundary vulnerabilities.
-    3. Generate a comprehensive test suite (including positive, negative, and edge scenarios).
-    4. Provide strict Gherkin (Given-When-Then) syntax for each test case.
+class RequirementAnalysisSuite(BaseModel):
+    """Container schema for total processed test suites validated from dynamic inputs."""
+    requirement_id: str
+    identified_edge_cases: List[str]
+    generated_suite: List[QA_TestCase]
 
-    Requirements to analyze:
-    \"\"\"{user_story_text}\"\"\"
-    """
-    completion = client.beta.chat.completions.parse(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": "You are a precise, production-grade QA Automation Assistant."},
-            {"role": "user", "content": prompt}
-        ],
-        response_format=QAAnalysisReport,
-    )
+class AutonomousQAAgent:
+    def __init__(self, api_key: Optional[str] = None):
+        self.api_key = api_key or os.getenv("OPENAI_API_KEY")
+        if not self.api_key:
+            logger.warning("[AGENT] OpenAI API Key is missing from runtime contexts.")
+        self.client = OpenAI(api_key=self.api_key)
 
-    # ИСПРАВЛЕНО: Добавлен [0] для выбора первого объекта из списка choices
-    return completion.choices[0].message.parsed
+    def analyze_requirements(self, payload_text: str) -> RequirementAnalysisSuite:
+        """Processes raw text specifications using GPT-4o structured validation matrices."""
+        logger.info("[AGENT] Initiating dynamic payload analysis cycle...")
+        
+        system_prompt = (
+            "You are an Advanced Autonomous QA Automation Engineer. Analyze the incoming software "
+            "requirements payload, extract edge cases, and output a strict JSON suite."
+        )
 
-if __name__ == "__main__":
-    sample_story = """
-    User Story: As a registered premium user, I want to request a wire transfer payout.
-    Acceptance Criteria:
-    - User triggers 'Request Payout' from the dashboard.
-    - System verifies if the balance is sufficient.
-    - Transactions above $5,000 require a 2FA SMS verification code (expires in 5 minutes).
-    - Payout requests are queued for compliance review if the destination account is international.
-    """
-    
-    print("⏳ Executing AI QA Agent Analysis...")
-    report = analyze_requirements(sample_story)
-    print(f"\n✅ Total Automated Test Cases Generated: {len(report.test_cases)}")
+        response = self.client.beta.chat.completions.parse(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": payload_text}
+            ],
+            response_format=RequirementAnalysisSuite,
+        )
+        logger.info("[AGENT] Structure validation completed successfully.")
+        return response.choices[0].message.parsed
